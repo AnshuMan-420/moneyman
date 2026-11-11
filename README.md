@@ -12,6 +12,7 @@ A private, local-first money tracker, budget planner, and calendar — all in on
 - Category donut chart and six-month cashflow chart
 - Calendar with events, reminders, special days, and birthday wishes
 - Password gate before every money change
+- In-app Back buttons, plus browser/Android Back that closes a modal or returns to the previous tab instead of leaving the app
 - Local profile photo, only after explicit permission
 - JSON backup / restore (Replace All or Merge with duplicate protection)
 - UTF-8 CSV export for the selected month

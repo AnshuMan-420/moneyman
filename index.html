@@ -1944,6 +1944,7 @@ let NOTIFIED = sanitizeNotified(readStored(NOTIFIED_KEY));
 let unlocked = false;
 let activeTab = 'overview';
 let tabHistory = [];
+let backGuardActive = false;
 let viewMonth = startOfMonth(new Date());
 let calMonth = startOfMonth(new Date());
 let selectedDay = todayISO();
@@ -2023,6 +2024,7 @@ function openModal({ title, subtitle = '', body = '', footer = '', size = '', on
     const first = box.querySelector('input:not([type="hidden"]):not([disabled]),textarea,select,button');
     if (first) first.focus({ preventScroll: true });
   });
+  syncBackGuard();
 }
 function closeModal(immediate = false) {
   const backdrop = byId('modalBackdrop');
@@ -2275,6 +2277,7 @@ function renderLogin() {
 }
 function enterApp() {
   unlocked = true;
+  backGuardActive = Boolean(window.history.state && window.history.state.moneymanGuard);
   byId('authScreen').hidden = true;
   byId('app').hidden = false;
   if (bootToastPending) {
@@ -2289,6 +2292,8 @@ function enterApp() {
 }
 function lockApp() {
   unlocked = false;
+  backGuardActive = false;
+  try { window.history.replaceState(null, ''); } catch (err) { /* no-op */ }
   closeModal(true);
   stopReminderLoop();
   byId('app').hidden = true;
@@ -2348,8 +2353,22 @@ function switchTab(tab, doScroll = true, recordHistory = true) {
     if (view) view.hidden = t !== next;
   });
   updateBackButton();
+  syncBackGuard();
   if (next === 'overview') window.requestAnimationFrame(scheduleCharts);
   if (doScroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function ensureBackGuard() {
+  if (!unlocked || backGuardActive) return;
+  try {
+    window.history.pushState({ moneymanGuard: true }, '');
+    backGuardActive = true;
+  } catch (err) {
+    backGuardActive = false;
+  }
+}
+function syncBackGuard() {
+  if (!unlocked) return;
+  if (isModalOpen() || activeTab !== 'overview') ensureBackGuard();
 }
 function updateBackButton() {
   const btn = byId('appBackBtn');
@@ -4671,6 +4690,8 @@ function openFullResetModal() {
         unlocked = false;
         activeTab = 'overview';
         tabHistory = [];
+        backGuardActive = false;
+        try { window.history.replaceState(null, ''); } catch (err) { /* no-op */ }
         viewMonth = startOfMonth(new Date());
         calMonth = startOfMonth(new Date());
         selectedDay = todayISO();
@@ -4953,6 +4974,23 @@ document.addEventListener('keydown', (e) => {
 byId('modalBackdrop').addEventListener('mousedown', (e) => {
   if (e.target === byId('modalBackdrop') && byId('modalBox').dataset.dismissible !== '0') closeModal();
 });
+window.addEventListener('popstate', (event) => {
+  backGuardActive = Boolean(event.state && event.state.moneymanGuard);
+  if (!unlocked) {
+    if (backGuardActive) {
+      backGuardActive = false;
+      try { window.history.replaceState(null, ''); } catch (err) { /* no-op */ }
+    }
+    return;
+  }
+  const hadModal = isModalOpen();
+  goBack();
+  if (hadModal) {
+    window.setTimeout(syncBackGuard, 220);
+  } else {
+    syncBackGuard();
+  }
+});
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   installPromptEvent = e;
@@ -5028,6 +5066,9 @@ function init() {
   try {
     initAppAssets();
     attachStaticEvents();
+    if (window.history.state && window.history.state.moneymanGuard) {
+      try { window.history.replaceState(null, ''); } catch (err) { /* no-op */ }
+    }
     if (PROFILE) renderAuth();
     else renderAuth();
     if (bootToastPending) {
